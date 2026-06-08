@@ -4,16 +4,14 @@ import json
 import argparse
 from datetime import datetime
 
-
 EXPENSES_FILE = "expenses.json"
-
 
 ###########################################
 # Helper functions                        #
 ###########################################
 
 def load_expenses():
-    # Load expenses from a JSON file, if it exists. If the file doesn't exist, return an empty list.
+    # Load expenses from a JSON file, if it exists. If not, return an empty list.
     try:
         with open(EXPENSES_FILE, "r") as file:
             return json.load(file)
@@ -32,35 +30,58 @@ def save_expenses(expenses):
 def add_expense(description, amount):
     # Create a new expense dictionary and add it to the list of expenses, then save it.
     expenses = load_expenses()
+    
+    # BUG FIX 1: Safely generate a unique ID based on the highest existing ID
+    new_id = max([expense["id"] for expense in expenses], default=0) + 1
+    
     new_expense = {
-        "id": len(expenses) + 1,
+        "id": new_id,
         "description": description,
         "amount": amount,
         "date": datetime.now().strftime("%Y-%m-%d")
     }
     expenses.append(new_expense)
     save_expenses(expenses)
+    print(f"Expense added successfully (ID: {new_id})")
 
 def list_expenses():
-    # List all expenses.
+    # List all expenses with clean, aligned columns.
     expenses = load_expenses()
-    print("ID   Description   Amount   Date")
+    print(f"{'ID':<4} {'Date':<12} {'Description':<15} {'Amount'}")
     for expense in expenses:
-        print(f"{expense['id']}   {expense['description']}   {expense['amount']}   {expense['date']}")
+        print(f"{expense['id']:<4} {expense['date']:<12} {expense['description']:<15} ${expense['amount']}")
 
 def delete_expense(expense_id):
     # Delete an expense by its ID.
     expenses = load_expenses()
+    initial_count = len(expenses)
+    
+    # Filter out the expense with the matching ID
     expenses = [expense for expense in expenses if expense["id"] != expense_id]
-    save_expenses(expenses)
+    
+    # Check if anything was actually deleted before saving
+    if len(expenses) < initial_count:
+        save_expenses(expenses)
+        print("Expense deleted successfully")
+    else:
+        print(f"No expense found with ID {expense_id}")
 
 def summarize_expenses(month=None):
     # Summarize expenses, optionally filtering by month.
     expenses = load_expenses()
+    
     if month:
-        expenses = [expense for expense in expenses if expense["date"].startswith(month)]
+        # BUG FIX 2: Format month integer to a 2-digit string (e.g., 8 becomes "08")
+        target_month = f"{month:02d}"
+        # Split the "YYYY-MM-DD" string and check the middle element (the month)
+        expenses = [expense for expense in expenses if expense["date"].split("-")[1] == target_month]
+        
     total = sum(expense["amount"] for expense in expenses)
-    print(f"Total expenses for {month if month else 'all time'}: {total}")
+    
+    if month:
+        print(f"Total expenses for month {month}: ${total}")
+    else:
+        print(f"Total expenses: ${total}")
 
 #############################################
 # Command-line interface setup              #
@@ -91,6 +112,7 @@ def setup_cli():
 # Starts the program
 if __name__ == "__main__":
     args = setup_cli()
+    
     if args.command == "add":
         add_expense(args.description, args.amount)
     elif args.command == "list":
